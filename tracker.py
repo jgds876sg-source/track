@@ -18,13 +18,23 @@ class TrackerCog(commands.Cog):
         try:
             if method == "POST":
                 async with session.post(url, json=json_data, timeout=10) as resp:
-                    if resp.status == 200: return await resp.json()
+                    if resp.status == 200: 
+                        return await resp.json()
             else:
                 async with session.get(url, timeout=10) as resp:
-                    if resp.status == 200: return await resp.json()
+                    if resp.status == 200: 
+                        return await resp.json()
         except Exception:
             return None
         return None
+
+    # دالة تحويل اليوزر نيم إلى User ID
+    async def get_user_id_from_username(self, session, username):
+        url = "https://users.roblox.com/v1/usernames/users"
+        data = await self.fetch_json(session, url, "POST", {"usernames": [username], "excludeBannedUsers": True})
+        if data and 'data' in data and len(data['data']) > 0:
+            return data['data'][0].get('id'), data['data'][0].get('name')
+        return None, None
 
     async def get_place_name(self, session, place_id):
         u_url = f"https://apis.roblox.com/universes/v1/places/{place_id}/universe-id"
@@ -56,7 +66,7 @@ class TrackerCog(commands.Cog):
                 if not channel:
                     continue
 
-                # 1. مراقبة التواجد والماب بالاسم
+                # 1. تتبع التواجد والماب
                 p_data = await self.fetch_json(session, "https://presence.roblox.com/v1/presence/users", "POST", {"userIds": [u_id]})
                 if p_data and p_data.get('userPresences'):
                     pres_info = p_data['userPresences'][0]
@@ -77,7 +87,7 @@ class TrackerCog(commands.Cog):
                         await channel.send(embed=embed)
                         database.update_user_data(u_id, presence=curr_pres, place_id=curr_place)
 
-                # 2. تتبع الأصدقاء بالأسماء
+                # 2. تتبع الأصدقاء
                 f_data = await self.fetch_json(session, f"https://friends.roblox.com/v1/users/{u_id}/friends")
                 if f_data and 'data' in f_data:
                     curr_friends_map = {f['id']: (f['name'], f['displayName']) for f in f_data['data']}
@@ -119,14 +129,27 @@ class TrackerCog(commands.Cog):
         await self.bot.wait_until_ready()
 
     @commands.command()
-    async def track(self, ctx, user_id: int):
-        database.add_tracked_user(user_id, ctx.channel.id)
-        await ctx.send(f"👁️ **بدأت المراقبة الكاملة بالأسماء للحساب:** `{user_id}`")
+    async def track(self, ctx, username: str):
+        async with aiohttp.ClientSession() as session:
+            user_id, official_name = await self.get_user_id_from_username(session, username)
+            if not user_id:
+                await ctx.send(f"❌ **لم يتم العثور على لاعب باسم:** `{username}`")
+                return
+
+            database.add_tracked_user(user_id, ctx.channel.id)
+            await ctx.send(f"👁️ **بدأت المراقبة الكلية للاعب:** `{official_name}` (ID: `{user_id}`)")
 
     @commands.command()
-    async def untrack(self, ctx, user_id: int):
-        database.remove_tracked_user(user_id)
-        await ctx.send(f"🛑 **تم إيقاف المراقبة عن الحساب:** `{user_id}`")
+    async def untrack(self, ctx, username: str):
+        async with aiohttp.ClientSession() as session:
+            user_id, official_name = await self.get_user_id_from_username(session, username)
+            if not user_id:
+                await ctx.send(f"❌ **لم يتم العثور على لاعب باسم:** `{username}`")
+                return
+
+            database.remove_tracked_user(user_id)
+            await ctx.send(f"🛑 **تم إيقاف المراقبة للاعب:** `{official_name}`")
 
 async def setup(bot):
     await bot.add_cog(TrackerCog(bot))
+ 
