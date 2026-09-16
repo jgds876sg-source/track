@@ -66,6 +66,10 @@ class TrackerCog(commands.Cog):
                 if not channel:
                     continue
 
+                # جلب معلومات الحساب المراقب (الاسم والـ Display Name)
+                target_username, target_display = await self.get_user_details(session, u_id)
+                header_text = f"👤 **الحساب المُرَاقَب:** `{target_display}` (@{target_username})\n"
+
                 # 1. تتبع التواجد والماب
                 p_data = await self.fetch_json(session, "https://presence.roblox.com/v1/presence/users", "POST", {"userIds": [u_id]})
                 if p_data and p_data.get('userPresences'):
@@ -74,7 +78,12 @@ class TrackerCog(commands.Cog):
                     curr_place = pres_info.get('placeId')
 
                     if curr_pres != last_pres or curr_place != last_place:
-                        embed = discord.Embed(title="🚨 تحديث حالة اللاعب", color=discord.Color.blue(), timestamp=datetime.datetime.now(datetime.timezone.utc))
+                        embed = discord.Embed(
+                            title="🚨 تحديث حالة اللاعب", 
+                            description=header_text, 
+                            color=discord.Color.blue(), 
+                            timestamp=datetime.datetime.now(datetime.timezone.utc)
+                        )
                         if curr_pres == 2 and curr_place:
                             map_name = await self.get_place_name(session, curr_place)
                             embed.add_field(name="الماب الحالي 🎮", value=f"**{map_name}**", inline=False)
@@ -98,12 +107,12 @@ class TrackerCog(commands.Cog):
                         added_ids = curr_ids - saved_ids
                         for a_id in added_ids:
                             name, display = curr_friends_map.get(a_id, (f"ID: {a_id}", ""))
-                            await channel.send(f"➕ **صديق جديد:** قام بإضافة `{display}` (@{name})")
+                            await channel.send(f"{header_text}➕ **صديق جديد:** تمت إضافة `{display}` (@{name})")
 
                         removed_ids = saved_ids - curr_ids
                         for r_id in removed_ids:
                             r_name, r_display = await self.get_user_details(session, r_id)
-                            await channel.send(f"➖ **حذف صديق:** قام بحذف `{r_display}` (@{r_name})")
+                            await channel.send(f"{header_text}➖ **انتهاء صداقة:** لم يعد صديقاً مع `{r_display}` (@{r_name})")
 
                     database.update_user_data(u_id, friends_json=json.dumps(list(curr_ids)))
 
@@ -117,7 +126,11 @@ class TrackerCog(commands.Cog):
                     if new_badges and saved_badges:
                         for b_info in b_data['data']:
                             if b_info['id'] in new_badges:
-                                embed = discord.Embed(title="🏅 الحصول على بادج جديد", color=discord.Color.gold())
+                                embed = discord.Embed(
+                                    title="🏅 الحصول على بادج جديد", 
+                                    description=header_text, 
+                                    color=discord.Color.gold()
+                                )
                                 embed.add_field(name="اسم البادج", value=b_info.get('name', 'غير معروف'))
                                 embed.add_field(name="الوصف", value=b_info.get('description', 'لا يوجد'))
                                 await channel.send(embed=embed)
@@ -152,4 +165,3 @@ class TrackerCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(TrackerCog(bot))
- 
